@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>カウントダウンタイマー</title>
+  <style>
+    :root {
+      --bg: #F5DCC8;
+      --surface: #FFFFFF;
+      --text: #3A2A1F;
+      --muted: #8A6A54;
+      --accent: #D9743A;
+      --danger: #D93025;
+      --border: #EFD9C4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(100%, 520px);
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    header { margin-bottom: 24px; }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    .lead,
+    .field-label,
+    .status {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 16px;
+    }
+
+    .preset-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    button,
+    input { font: inherit; }
+
+    button {
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      padding: 8px 12px;
+    }
+
+    button:hover { border-color: var(--accent); }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 3px solid rgba(217, 116, 58, .32);
+      outline-offset: 2px;
+    }
+
+    .preset-button[aria-pressed="true"],
+    .start-button {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+
+    .field {
+      margin-top: 16px;
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 16px;
+      padding: 8px 12px;
+    }
+
+    .error {
+      min-height: 21px;
+      margin: 8px 0 16px;
+      color: var(--danger);
+      font-size: 14px;
+    }
+
+    .error:empty { display: none; }
+
+    .timer-card { text-align: center; }
+
+    .time {
+      overflow-wrap: anywhere;
+      margin: 0;
+      color: var(--accent);
+      font-size: clamp(40px, 14vw, 64px);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .04em;
+      line-height: 1.2;
+    }
+
+    .status {
+      min-height: 21px;
+      margin-top: 8px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .controls button { width: 100%; }
+
+    [hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>カウントダウンタイマー</h1>
+      <p class="lead">押すだけで、区切りたい時間がすぐ測れます</p>
+    </header>
+
+    <section class="card" aria-label="時間を選ぶ">
+      <p class="field-label">すぐに始める</p>
+      <div class="preset-list" aria-label="プリセット時間">
+        <button class="preset-button" type="button" data-minutes="1" aria-pressed="false">1分</button>
+        <button class="preset-button" type="button" data-minutes="3" aria-pressed="true">3分</button>
+        <button class="preset-button" type="button" data-minutes="5" aria-pressed="false">5分</button>
+        <button class="preset-button" type="button" data-minutes="10" aria-pressed="false">10分</button>
+      </div>
+      <div class="field">
+        <label class="field-label" for="custom-minutes">任意の分数</label>
+        <input id="custom-minutes" type="number" inputmode="numeric" min="1" max="999" step="1" placeholder="例：15" aria-describedby="custom-help">
+        <p class="lead" id="custom-help">入力後に「開始」を押してください（1〜999分）</p>
+      </div>
+    </section>
+
+    <p class="error" id="error" role="alert" aria-live="polite"></p>
+
+    <section class="card timer-card" id="timer-card" aria-label="残り時間">
+      <p class="time" id="time" aria-label="残り時間 3分">03:00</p>
+      <p class="status" id="status" aria-live="polite">3分を設定中です</p>
+      <div class="controls" aria-label="タイマー操作">
+        <button class="start-button" id="start" type="button">開始</button>
+        <button id="pause" type="button">一時停止</button>
+        <button id="reset" type="button">リセット</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const customMinutes = document.querySelector('#custom-minutes');
+    const error = document.querySelector('#error');
+    const timerCard = document.querySelector('#timer-card');
+    const time = document.querySelector('#time');
+    const status = document.querySelector('#status');
+    const startButton = document.querySelector('#start');
+    const pauseButton = document.querySelector('#pause');
+    const resetButton = document.querySelector('#reset');
+    const presetButtons = document.querySelectorAll('.preset-button');
+
+    let remainingSeconds = 3 * 60;
+    let configuredSeconds = remainingSeconds;
+    let intervalId = null;
+    let audioContext = null;
+
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainder = seconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+    }
+
+    function renderTime() {
+      const formatted = formatTime(remainingSeconds);
+      time.textContent = formatted;
+      time.setAttribute('aria-label', `残り時間 ${formatted}`);
+    }
+
+    function setPresetSelection(minutes) {
+      presetButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', String(Number(button.dataset.minutes) === minutes));
+      });
+    }
+
+    function showError(message) {
+      error.textContent = message;
+      timerCard.hidden = true;
+    }
+
+    function clearError() {
+      error.textContent = '';
+      timerCard.hidden = false;
+    }
+
+    function stopTimer() {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+
+    function playEndSound() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      audioContext = audioContext || new AudioContextClass();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.12, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.35);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.35);
+    }
+
+    function prepareAudio() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      audioContext = audioContext || new AudioContextClass();
+      if (audioContext.state === 'suspended') audioContext.resume();
+    }
+
+    function startTimer() {
+      if (intervalId !== null || remainingSeconds <= 0) return;
+      clearError();
+      prepareAudio();
+      status.textContent = '計測中です';
+      intervalId = setInterval(() => {
+        remainingSeconds -= 1;
+        renderTime();
+        if (remainingSeconds <= 0) {
+          remainingSeconds = 0;
+          stopTimer();
+          status.textContent = '時間になりました';
+          playEndSound();
+        }
+      }, 1000);
+    }
+
+    function getCustomSeconds() {
+      const value = customMinutes.value.trim();
+      if (value === '') return null;
+      const minutes = Number(value);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 999) {
+        showError('1〜999の整数で入力してください。');
+        return false;
+      }
+      return minutes * 60;
+    }
+
+    function configureTimer(seconds, label) {
+      stopTimer();
+      configuredSeconds = seconds;
+      remainingSeconds = seconds;
+      renderTime();
+      status.textContent = `${label}を設定しました`;
+      clearError();
+    }
+
+    presetButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const minutes = Number(button.dataset.minutes);
+        customMinutes.value = '';
+        setPresetSelection(minutes);
+        configureTimer(minutes * 60, `${minutes}分`);
+        startTimer();
+      });
+    });
+
+    startButton.addEventListener('click', () => {
+      const customSeconds = getCustomSeconds();
+      if (customSeconds === false) return;
+      if (customSeconds !== null) {
+        const minutes = Number(customMinutes.value);
+        setPresetSelection(-1);
+        configureTimer(customSeconds, `${minutes}分`);
+      }
+      if (remainingSeconds <= 0) {
+        remainingSeconds = configuredSeconds;
+        renderTime();
+      }
+      startTimer();
+    });
+
+    pauseButton.addEventListener('click', () => {
+      stopTimer();
+      clearError();
+      status.textContent = remainingSeconds > 0 ? '一時停止中です' : '時間になりました';
+    });
+
+    resetButton.addEventListener('click', () => {
+      stopTimer();
+      remainingSeconds = configuredSeconds;
+      renderTime();
+      clearError();
+      status.textContent = 'リセットしました';
+    });
+
+    customMinutes.addEventListener('input', () => {
+      if (error.textContent) clearError();
+    });
+
+    renderTime();
+  </script>
+</body>
+</html>
